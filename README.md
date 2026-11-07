@@ -144,18 +144,3 @@ Updated each Monday. Columns: player, cluster, recency, frequency, monetary, qui
 ### `ml_score_risk.rfm_lde_historico`
 52 snapshots (1 year) for cluster movement analysis
 
-## Limitations
-
-1. Short period (12 weeks)
-2. Fixed K (4 optimal statistically, not commercially)
-3. Moderate predictive power (Spearman 0.41)
-4. Doesn't exclude voluntary opt-outs
-5. Weekly update (slow changes)
-
-## Next Steps
-
-- Commercial validation of cluster representatives
-- A/B testing: cluster-based vs generic campaigns
-- KPI: cluster movement tracking
-- Redshift for more frequent updates
-

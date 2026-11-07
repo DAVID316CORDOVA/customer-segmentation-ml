@@ -1,226 +1,161 @@
-# RFM-L-DE — Segmentación Predictiva de Jugadores por Ciclo de Vida
+# RFM-L-DE — Predictive Player Segmentation by Lifecycle
 
-Modelo K-Means que segmenta 461,400 jugadores activos en 4 clusters RFM sobre variables de 12 semanas. Complementado con LightGBM que predice quintiles de valor esperado dentro de cada cluster para priorización comercial.
+K-Means model that segments 461,400 active players into 4 RFM clusters over 12-week variables. Complemented with LightGBM predicting value quintiles within each cluster for commercial prioritization.
 
-**Estado:** En producción | **Schedule:** Lunes 08:00 UTC (03:00 Lima) | **Silhouette:** 0.42
+**Status:** In production | **Schedule:** Monday 08:00 UTC (03:00 Lima) | **Silhouette:** 0.42
 
----
+## Executive Summary
 
-## Resumen Ejecutivo
+Segmentation that groups 461K players into 4 RFM clusters (lifecycle stages):
 
-Segmentación que agrupa 461K jugadores en 4 clusters que representan etapas del ciclo de vida:
+- **Cluster 1 - High Value (45K, 9.8%):** Maximum spend, high frequency
+- **Cluster 2 - Active (120K, 26.1%):** Regular activity, moderate value
+- **Cluster 3 - Dormant (85K, 18.6%):** Inactive, need reactivation
+- **Cluster 4 - New (210K, 45.5%):** Very recent, low volume
 
-- **Cluster 1 - Alta Valor (45K, 9.8%):** Máximo gasto, frecuencia elevada, activos
-- **Cluster 2 - Activos (120K, 26.1%):** Actividad regular, valor moderado
-- **Cluster 3 - Dormidos (85K, 18.6%):** Inactivos, requieren reactivación
-- **Cluster 4 - Nuevos (210K, 45.5%):** Muy recientes, bajo volumen
+**Silhouette:** 0.42 | **LightGBM Quintiles:** Spearman 0.41 (+95% vs no cluster)
 
-**Silhouette Score:** 0.42 (clusters bien separados). Dentro de cada cluster, LightGBM predice quintiles de valor esperado con **Spearman 0.41**, permitiendo priorizar acciones comerciales.
+![Clustering Graphics](./graficos_clustering.png)
 
----
+## Exploratory Data Analysis (EDA)
 
-## Análisis Exploratorio de Datos (EDA)
+### Player Distribution
 
-### Distribución de Jugadores
+| Cluster | Size | Recency | Frequency | Monetary | Deposited | Withdrew |
+|---------|------|---------|-----------|----------|-----------|----------|
+| **High Value** | 45K (9.8%) | 5 days | 85 | S/ 12.5K | S/ 8.2K | S/ 7.1K |
+| **Active** | 120K (26.1%) | 15 days | 45 | S/ 3.2K | S/ 2.1K | S/ 1.8K |
+| **Dormant** | 85K (18.6%) | 45 days | 8 | S/ 450 | S/ 280 | S/ 200 |
+| **New** | 210K (45.5%) | 2 days | 3 | S/ 120 | S/ 85 | S/ 30 |
 
-| Cluster | Tamaño | Recency | Frequency | Monetary | Depositó | Retiró | Perfil |
-|---------|--------|---------|-----------|----------|----------|--------|---------|
-| **1 Alta Valor** | 45,230 (9.8%) | 5 días | 85 | S/ 12.5K | S/ 8.2K | S/ 7.1K | Máximo gasto, frecuencia alta, activos |
-| **2 Activos** | 120,500 (26.1%) | 15 días | 45 | S/ 3.2K | S/ 2.1K | S/ 1.8K | Regulares, valor moderado |
-| **3 Dormidos** | 85,670 (18.6%) | 45 días | 8 | S/ 450 | S/ 280 | S/ 200 | Inactivos, bajo valor |
-| **4 Nuevos** | 210,000 (45.5%) | 2 días | 3 | S/ 120 | S/ 85 | S/ 30 | Recientes, onboarding |
+**Insight:** Cluster 1 is 5.4% but generates ~30% of volume.
 
-**Insight:**
-- Cluster 1: 5.4% de jugadores generan ~30% del volumen
-- Cluster 4: Mitad de la base, pero value negligible inicialmente
-- Oportunidad: Mover C2→C1 o C3→C2
+### K Optimization Analysis
 
-### Análisis de Número Óptimo de Clusters
+| K | Silhouette | Interpretability | Decision |
+|---|-----------|------------------|----------|
+| K=2 | 0.38 | Very high | Too generic |
+| K=3 | 0.42 | High | Strong competitor |
+| **K=4** | **0.42** | **Excellent** | **SELECTED** |
+| K=5 | 0.39 | Medium | Starts degrading |
+| K=6 | 0.35 | Low | Small, noisy clusters |
 
-| K | Silhouette | Interpretabilidad | Nota |
-|---|-----------|-------------------|------|
-| K=2 | 0.38 | Muy alta | Demasiado genérico |
-| K=3 | 0.42 | Alta | Competidor fuerte |
-| **K=4** | **0.42** | **Excelente** | **ELEGIDO** - Máxima interpretabilidad |
-| K=5 | 0.39 | Media | Empieza a degradar |
-| K=6 | 0.35 | Baja | Clusters pequeños, ruido |
+**Decision:** K=4 maintains Silhouette equal to K=3 but much better interpretability.
 
-**Decisión:** K=4 mantiene Silhouette (0.42) igual a K=3 pero con interpretabilidad mucho mejor para acciones comerciales.
+### Value Quintile Distribution (LightGBM)
 
-### Distribución de Valor Esperado (LightGBM Quintiles)
+| Cluster | Q1 (Low) | Q2 | Q3 | Q4 | Q5 (High) |
+|---------|----------|-----|-----|-----|-----------|
+| High Value | 12% | 28% | 35% | 18% | 7% |
+| Active | 35% | 25% | 20% | 15% | 5% |
+| Dormant | 60% | 25% | 10% | 4% | 1% |
+| New | 70% | 20% | 8% | 1% | 1% |
 
-| Cluster | Q1 (Bajo) | Q2 | Q3 | Q4 | Q5 (Alto) | Focus |
-|---------|-----------|-----|-----|-----|-----------|-------|
-| Alta Valor | 12% | 28% | 35% | 18% | 7% | Retención VIP |
-| Activos | 35% | 25% | 20% | 15% | 5% | Cross-sell |
-| Dormidos | 60% | 25% | 10% | 4% | 1% | Reactivación |
-| Nuevos | 70% | 20% | 8% | 1% | 1% | Onboarding |
+**Insight:** Cluster 1 dominates Q4-Q5 (high income).
 
-**Insight:** Cluster 1 domina Q4-Q5 (alta renta). Cluster 4 concentrado en Q1 (bajo retorno inicial).
+## RFM Variables (6 total) — Last 12 Weeks
 
-### Silhouette Score por K
-
-![Análisis Clustering](./graficos_clustering_rfm.png)
-
-Máximo en K=4, indicando:
-- Clusters bien separados
-- Solapamiento moderado (realista)
-- Equilibrio interpretabilidad/cohesión
-
----
-
-## Solución Implementada
-
-### Variables RFM (6 totales) - Últimas 12 Semanas
-
-| Variable | Rango | Interpretación |
+| Variable | Range | Interpretation |
 |----------|-------|-----------------|
-| Recency | 2-45 días | Cuánto falta para churn |
-| Frequency | 3-85 apuestas | Compromiso/engagement |
-| Monetary | S/ 120-12.5K | Volumen total |
-| Deposit Frequency | 1-25 | Número de depósitos |
-| Deposit Amount | S/ 85-8.2K | Inversión |
-| Withdrawal Amount | S/ 30-7.1K | Retiros |
+| Recency | 2-45 days | Time until churn |
+| Frequency | 3-85 bets | Engagement/commitment |
+| Monetary | S/ 120-12.5K | Total volume |
+| Deposit Frequency | 1-25 | Number of deposits |
+| Deposit Amount | S/ 85-8.2K | Investment |
+| Withdrawal Amount | S/ 30-7.1K | Withdrawals |
 
-**Período:** Últimas 12 semanas. Solo jugadores con ≥1 apuesta (461K de 850K totales).
+**Period:** 12 weeks. Only players with ≥1 bet (461K of 850K).
 
-### K-Means K=4
+## Model: K-Means K=4 + LightGBM
 
 ```python
-from sklearn.cluster import KMeans
-
-kmeans = KMeans(
-    n_clusters=4,
-    random_state=42,
-    n_init=10,
-    init='k-means++',
-    n_jobs=-1
-)
-
+# K-Means clustering with k-means++ initialization
+kmeans = KMeans(n_clusters=4, init='k-means++', random_state=42)
 labels = kmeans.fit_predict(X_scaled)  # StandardScaler
+
+# LightGBM per cluster for quintile prediction
+for cluster in [1,2,3,4]:
+    model = LGBMClassifier(num_leaves=31, n_estimators=100, class_weight='balanced')
+    model.fit(X[labels==cluster], quintiles[labels==cluster])
 ```
 
-**Reentrenamiento:** Cada lunes, histórico de 52 semanas para tracking de movimiento.
+**Metric:** Spearman 0.41 (cluster adds +95% predictive power vs no cluster).
 
-### LightGBM Quintiles
+## Results
 
-```python
-for cluster in [1, 2, 3, 4]:
-    X_cluster = X[labels == cluster]
-    y_cluster = quintiles[labels == cluster]
-    
-    model = LGBMClassifier(
-        num_leaves=31,
-        n_estimators=100,
-        class_weight="balanced"
-    )
-    model.fit(X_cluster, y_cluster)
-    predicciones[cluster] = model.predict(X_cluster)
-```
+### Clustering Performance
 
-**Métrica:** Spearman 0.41 (cluster agrega poder predictivo vs 0.21 sin cluster)
+| Metric | Value | Interpretation |
+|--------|-------|-----------------|
+| Players | 461,400 | 100% active base |
+| Clusters | 4 | Optimal by Silhouette |
+| Silhouette | 0.42 | Good separability |
+| Stability | High | K=4 is robust |
 
----
+### Predictive Power
 
-## Resultados
+| Metric | No Cluster | With Cluster | Gain |
+|--------|-----------|------------|----------|
+| Spearman | 0.21 | 0.41 | +0.20 (+95%) |
+| Top 20% Precision | 32% | 51% | +19 pp |
 
-### Performance de Clustering
+## Commercial Applications
 
-| Métrica | Valor | Interpretación |
-|---------|-------|-----------------|
-| Jugadores analizados | 461,400 | 100% base activa |
-| Número de clusters | 4 | Óptimo por Silhouette |
-| Silhouette Score | 0.42 | Buena separabilidad |
-| Separabilidad | Buena | Clusters interpretables |
-| Estabilidad | Alta | K=4 es robusto |
+### Segmented Communications
 
-### Power Predictivo del Cluster
+- **C1:** VIP rewards, exclusive events, high limits
+- **C2:** Frequency bonuses, referrals, cross-sell
+- **C3:** Reactivation, attractive bonuses
+- **C4:** Onboarding, welcome bonus, tutorials
 
-| Métrica | Sin Cluster | Con Cluster | Ganancia |
-|---------|-------------|------------|----------|
-| Spearman (quintil predicho) | 0.21 | 0.41 | +0.20 (+95%) |
-| Precisión top 20% | 32% | 51% | +19 pp |
+### Retention Priorities
 
-**Conclusión:** Cluster agrega 95% de poder predictivo.
+- Preventive focus on C1 (maximum impact)
+- C2→C1 movement as growth metric
+- C3→C2 reactivation as efficiency metric
 
----
+### Abandonment Alerts
 
-## Aplicaciones Comerciales
+| Cluster | Threshold | Action |
+|---------|-----------|--------|
+| C1 | 7 days inactive | VIP priority contact |
+| C2 | 14 days | Reactivation offer |
+| C3 | 60 days | Expected (dormant) |
+| C4 | 3 days | Intensive onboarding |
 
-### 1. Comunicaciones Segmentadas
-
-- **C1:** VIP rewards, eventos exclusivos, límites altos
-- **C2:** Bonos de frecuencia, referrals, cross-sell
-- **C3:** Reactivación, bonos atractivos, reinicio
-- **C4:** Onboarding, bonus bienvenida, tutoriales
-
-### 2. Prioridades de Retención
-
-- Focus preventivo en C1 (máximo impacto económico)
-- Movimiento C2→C1 como métrica de crecimiento
-- Reactivación C3→C2 como métrica de eficiencia
-
-### 3. Alertas de Abandono
-
-| Cluster | Umbral de Alerta | Acción |
-|---------|-----------------|--------|
-| C1 | Sin actividad 7 días | Contacto VIP prioritario |
-| C2 | Sin actividad 14 días | Oferta de reactivación |
-| C3 | Sin actividad 60 días | Esperado (dormidos) |
-| C4 | Sin actividad 3 días | Onboarding intensivo |
-
----
-
-## Limitaciones
-
-1. **Período corto:** 12 semanas puede no capturar ciclos muy largos
-2. **K fijo:** K=4 óptimo estadísticamente, no necesariamente óptimo comercialmente
-3. **Poder predictivo moderado:** Spearman 0.41 (no perfecto)
-4. **Autoexcluidos:** No excluye jugadores voluntariamente
-5. **Actualización semanal:** Cambios lentos, asignación se recalcula solo lunes
-
----
-
-## Cómo Ejecutarlo
-
-### En Airflow
+## Execution
 
 ```bash
-airflow dags trigger dag_rfm_semanal_v3
-```
+# Airflow
+airflow dags trigger dag_rfm_semanal_v3  # Monday 08:00 UTC
 
-Cada lunes 08:00 UTC (03:00 Lima)
-
-### Consultar Resultados
-
-```sql
-SELECT cluster, COUNT(*) as n, ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER(), 1) as pct
+# Results
+SELECT cluster, COUNT(*), ROUND(100.0*COUNT(*)/SUM(COUNT(*)) OVER(), 1)
 FROM ml_score_risk.rfm_lde_quintiles_semanal
 WHERE run_date = CURRENT_DATE
-GROUP BY cluster
-ORDER BY cluster;
+GROUP BY cluster;
 ```
 
----
-
-## Tablas Generadas
+## Generated Tables
 
 ### `ml_score_risk.rfm_lde_quintiles_semanal`
-
-Actualizada cada lunes. Usable directamente en campaigns:
-```
-player | cluster | recency | frequency | monetary | quintil | run_date
-```
+Updated each Monday. Columns: player, cluster, recency, frequency, monetary, quintile, run_date
 
 ### `ml_score_risk.rfm_lde_historico`
+52 snapshots (1 year) for cluster movement analysis
 
-Retiene 52 snapshots (1 año) para análisis de movimiento entre clusters.
+## Limitations
 
----
+1. Short period (12 weeks)
+2. Fixed K (4 optimal statistically, not commercially)
+3. Moderate predictive power (Spearman 0.41)
+4. Doesn't exclude voluntary opt-outs
+5. Weekly update (slow changes)
 
-## Próximos Pasos
+## Next Steps
 
-- Validación comercial de representatividad
-- A/B testing: campaigns por cluster vs genéricas
-- KPI: movimiento entre clusters
-- Incorporar datos Redshift (últimas 24h) para update más frecuente
+- Commercial validation of cluster representatives
+- A/B testing: cluster-based vs generic campaigns
+- KPI: cluster movement tracking
+- Redshift for more frequent updates
+
